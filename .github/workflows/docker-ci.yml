@@ -1,21 +1,73 @@
-name: Docker Ci Pipeline
+
+name: Docker CI Pipeline
 
 on:
- push:
-   branches:
-     - main
- pull_request:
-   branches:
-     - main
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
 
 jobs:
   docker-build:
-   runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-   steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Check Docker Hub Secrets
+        if: github.event_name == 'push'
+        env:
+          HUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          HUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$HUB_USERNAME" ]; then
+            echo "::error::DOCKERHUB_USERNAME is missing"
+            exit 1
+          fi
+
+          if [ -z "$HUB_TOKEN" ]; then
+            echo "::error::DOCKERHUB_TOKEN is missing"
+            exit 1
+          fi
+
+          echo "Both Docker Hub secrets are present"
+
+      - name: Login to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:latest .
+
+      - name: Push Docker Image
+        if: github.event_name == 'push'
+        run: |
+          docker push \
+            ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:latest
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
