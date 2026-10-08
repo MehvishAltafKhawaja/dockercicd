@@ -13,12 +13,12 @@ jobs:
    runs-on: ubuntu-latest
 
    steps:
-     - name: Checkout Repository
-       uses: action/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-     - name: Build Docker Image
-       run: docker build -t github-docker-demo:latest
+    - name: Build Docker Image
+      run: docker build -t github-docker-demo:latest
 
-     - name: List Docker Images
-       run: docker images
+    - name: List Docker Images
+      run: docker images
   
