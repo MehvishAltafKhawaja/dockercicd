@@ -17,7 +17,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Build Docker Image
-      run: docker build -t github-docker-demo:latest
+      run: docker build -t github-docker-demo:latest .
 
     - name: List Docker Images
       run: docker images
