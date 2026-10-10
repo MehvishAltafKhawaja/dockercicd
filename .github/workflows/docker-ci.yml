@@ -1,61 +1,83 @@
 
-name: Docker CI Pipeline
+name: Docker CI/CD to EC2
 
 on:
   push:
     branches:
       - main
 
-  pull_request:
-    branches:
-      - main
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
 
 jobs:
-  docker-build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Check Docker Hub Secrets
-        if: github.event_name == 'push'
-        env:
-          HUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          HUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          if [ -z "$HUB_USERNAME" ]; then
-            echo "::error::DOCKERHUB_USERNAME is missing"
-            exit 1
-          fi
-
-          if [ -z "$HUB_TOKEN" ]; then
-            echo "::error::DOCKERHUB_TOKEN is missing"
-            exit 1
-          fi
-
-          echo "Both Docker Hub secrets are present"
-
       - name: Login to Docker Hub
-        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
-          registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build Docker Image
         run: |
-          docker build \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:latest .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:${{ github.sha }} .
 
       - name: Push Docker Image
-        if: github.event_name == 'push'
         run: |
-          docker push \
-            ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:${{ github.sha }}
 
-       
+      - name: Deploy on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:${{ github.sha }}
 
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key \
+            "$EC2_USER@$EC2_HOST" \
+            "sudo docker pull '$IMAGE'"
+
+          ssh -i ~/.ssh/deploy_key \
+            "$EC2_USER@$EC2_HOST" \
+            "sudo docker rm -f myapp || true"
+
+          ssh -i ~/.ssh/deploy_key \
+            "$EC2_USER@$EC2_HOST" \
+            "sudo docker run -d \
+              --name myapp \
+              --restart unless-stopped \
+              -p 5000:5000 \
+              '$IMAGE'"
+
+      
     
-  
+
+
+
+
+
+
+
+
+
+      
