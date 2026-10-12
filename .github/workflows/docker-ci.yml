@@ -35,6 +35,7 @@ jobs:
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:${{ github.sha }}
 
+      
       - name: Deploy on EC2
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -44,30 +45,41 @@ jobs:
           IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/github-actions-demo:${{ github.sha }}
 
         run: |
+          set -e
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
           printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
+          if [ -z "$EC2_KNOWN_HOSTS" ]; then
+            echo "ERROR: EC2_KNOWN_HOSTS secret is empty"
+            exit 1
+          fi
+
           printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-          ssh -i ~/.ssh/deploy_key \
+          ssh -o StrictHostKeyChecking=yes \
+            -i ~/.ssh/deploy_key \
             "$EC2_USER@$EC2_HOST" \
             "sudo docker pull '$IMAGE'"
 
-          ssh -i ~/.ssh/deploy_key \
+          ssh -o StrictHostKeyChecking=yes \
+            -i ~/.ssh/deploy_key \
             "$EC2_USER@$EC2_HOST" \
             "sudo docker rm -f myapp || true"
 
-          ssh -i ~/.ssh/deploy_key \
+          ssh -o StrictHostKeyChecking=yes \
+            -i ~/.ssh/deploy_key \
             "$EC2_USER@$EC2_HOST" \
             "sudo docker run -d \
               --name myapp \
               --restart unless-stopped \
               -p 5000:5000 \
               '$IMAGE'"
+
 
       
     
